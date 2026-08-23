@@ -21,8 +21,8 @@
 
   <style>
     * { box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 15px; background-color: #f4f4f9; margin: 0; }
-    .container { max-width: 600px; margin: 0 auto; text-align: center; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 15px; background-color: #f4f4f9; margin: 0; position: relative; min-height: 100vh; }
+    .container { max-width: 600px; margin: 0 auto; text-align: center; padding-bottom: 30px; }
     .status { font-weight: bold; color: #2b529a; margin: 12px 0; font-size: 15px; line-height: 1.4; }
     
     .canvas-wrapper { position: relative; display: inline-block; width: 100%; margin-top: 10px; border: 2px solid #333; background: #000; border-radius: 8px; overflow: hidden; transform: translateZ(0); }
@@ -62,6 +62,19 @@
     .youtube-link:hover { background: #f0f7ff; transform: translateY(-1px); }
     .youtube-icon { width: 22px; height: 16px; fill: #FF0000; }
     .yt-label { font-size: 11px; background: #ff2d55; color: white; padding: 2px 6px; border-radius: 10px; margin-left: 4px; font-weight: 800; }
+
+    /* 우측 하단 연한 방문자 수 표기 스타일 */
+    .page-visit-counter {
+      position: fixed;
+      bottom: 8px;
+      right: 12px;
+      font-size: 10px;
+      color: #aaaaaa;
+      font-family: monospace, sans-serif;
+      pointer-events: none;
+      z-index: 9999;
+      user-select: none;
+    }
   </style>
 </head>
 <body>
@@ -161,13 +174,16 @@
     </footer>
   </div>
 
+  <!-- 제일 우측 하단 접근 횟수 카운터 -->
+  <div id="visitCounter" class="page-visit-counter">v: ...</div>
+
   <video id="videoInput" style="display:none;" autoplay playsinline muted webkit-playsinline></video>
   <canvas id="templateCanvas" style="display:none;"></canvas>
 
   <!-- Firebase v10 SDK 연동 모듈 스크립트 -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getFirestore, collection, addDoc, doc, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { getFirestore, collection, addDoc, doc, getDoc, getCountFromServer, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
     import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-analytics.js";
 
     const firebaseConfig = {
@@ -190,10 +206,23 @@
       analytics = getAnalytics(app);
       console.log("🔥 Firebase 및 Analytics 초기화 완료");
 
-      // 1. 페이지 방문 로그 기록 (Firestore)
-      addDoc(collection(db, "visits"), {
+      // 1. 페이지 방문 로그 기록 (Firestore) 및 전체 방문수 갱신
+      const visitsCol = collection(db, "visits");
+      addDoc(visitsCol, {
         timestamp: serverTimestamp(),
         userAgent: navigator.userAgent
+      }).then(async () => {
+        // 방문 기록 추가 후 총 방문수 조회
+        try {
+          const snapshot = await getCountFromServer(visitsCol);
+          const totalVisits = snapshot.data().count;
+          const visitCounterEl = document.getElementById('visitCounter');
+          if (visitCounterEl) {
+            visitCounterEl.innerText = `v: ${totalVisits}`;
+          }
+        } catch(e) {
+          console.warn("방문수 조회 실패:", e);
+        }
       }).catch(e => console.warn("방문 기록 실패:", e));
 
       // 2. Firestore에서 최신 유튜브 쇼츠 ID 불러오기
@@ -310,6 +339,13 @@
       poseModel.onResults(onPoseResults);
       statusText.innerText = "✅ 준비 완료! 아래 버튼을 눌러 영상을 선택하세요.";
     }
+
+    // 라이브러리 로드 완료 후 Pose 초기화 호출
+    window.addEventListener('load', () => {
+      if (typeof Pose !== 'undefined') {
+        initPose();
+      }
+    });
 
     modeSelect.addEventListener('change', () => {
       const isAi = (modeSelect.value === 'ai');
@@ -852,43 +888,30 @@
         
         link.download = `crossfit_move_${timeStamp}.png`;
         link.href = imageURI;
-        document.body.appendChild(link);
         link.click();
-        document.body.removeChild(link);
-
-        statusText.innerText = "💾 이미지가 저장되었습니다!";
-      } catch (err) {
-        console.error(err);
-        statusText.innerText = "❌ 저장 실패: 브라우저 권한을 확인하세요.";
+      } catch (e) {
+        console.error("이미지 저장 실패:", e);
       }
     });
 
     saveVideoBtn.addEventListener('click', () => {
       if (recordedChunks.length === 0) {
-        statusText.innerText = "⚠️ 녹화된 영상 데이터가 없습니다.";
+        alert("저장할 녹화 영상 데이터가 없습니다.");
         return;
       }
-      const blob = new Blob(recordedChunks, { type: recordedChunks[0].type || 'video/webm' });
+      const blob = new Blob(recordedChunks, { type: 'video/webm' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       const now = new Date();
       const timeStamp = `${now.getMonth()+1}${now.getDate()}_${now.getHours()}${now.getMinutes()}`;
-      
-      const ext = recordedChunks[0].type.includes('mp4') ? 'mp4' : 'webm';
-      link.download = `crossfit_move_${timeStamp}.${ext}`;
+
+      link.download = `crossfit_move_${timeStamp}.webm`;
       link.href = url;
-      document.body.appendChild(link);
       link.click();
-      document.body.removeChild(link);
-      
-      statusText.innerText = "🎬 동영상이 성공적으로 저장되었습니다!";
     });
 
     resetBtn.addEventListener('click', () => {
       isTracking = false;
-      stopVideoRecording();
-      video.pause();
-      video.currentTime = 0;
       trajectory = [];
       templateData = null;
       lastPoint = null;
@@ -896,27 +919,17 @@
       currentAnglePt = null;
       maxSpeedPt = null;
       topPt = null;
-      loopATime = null;
-      loopBTime = null;
-      isLoopEnabled = false;
 
-      setLoopABtn.innerText = `반복구간 시작`;
-      setLoopBBtn.innerText = `반복구간 종료`;
-      toggleLoopBtn.classList.remove('active');
-      toggleLoopBtn.innerText = `🔁 구간반복 OFF`;
-      toggleLoopBtn.disabled = true;
+      if (video.src) {
+        video.pause();
+        video.currentTime = 0;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      }
 
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      statusText.innerText = "초기화되었습니다. 다시 영상을 선택하거나 점을 지정하세요.";
-      startBtn.disabled = true;
+      updateStatusGuide();
       saveBtn.disabled = true;
       saveVideoBtn.disabled = true;
-      updateTimestampUI();
     });
-
-    window.onload = () => {
-      initPose();
-    };
   </script>
 </body>
 </html>
