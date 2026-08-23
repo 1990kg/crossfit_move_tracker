@@ -3,63 +3,299 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>비디오 궤적 추적기</title>
-  <script async src="https://docs.opencv.org/4.x/opencv.js" onload="onOpenCvReady();"></script>
+  <title>Crossfit Move Tracker</title>
+  
+  <!-- MediaPipe Pose 로드 -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+
   <style>
     * { box-sizing: border-box; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 15px; background-color: #f4f4f9; margin: 0; }
     .container { max-width: 600px; margin: 0 auto; text-align: center; }
     .status { font-weight: bold; color: #2b529a; margin: 12px 0; font-size: 15px; line-height: 1.4; }
-    .canvas-wrapper { position: relative; display: inline-block; width: 100%; margin-top: 10px; border: 2px solid #333; background: #000; border-radius: 8px; overflow: hidden; }
-    canvas { display: block; width: 100% !important; height: auto !important; cursor: crosshair; touch-action: none; }
+    
+    .canvas-wrapper { position: relative; display: inline-block; width: 100%; margin-top: 10px; border: 2px solid #333; background: #000; border-radius: 8px; overflow: hidden; transform: translateZ(0); }
+    canvas { display: block; width: 100% !important; height: auto !important; cursor: crosshair; touch-action: none; will-change: transform; }
+    
+    .select-group { margin: 10px 0; display: flex; flex-direction: column; gap: 8px; align-items: center; justify-content: center; background: #fff; padding: 12px; border-radius: 8px; border: 1px solid #ddd; }
+    .select-row { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; flex-wrap: wrap; }
+    select, label { font-size: 14px; font-weight: bold; }
+    select { padding: 8px 12px; border-radius: 6px; border: 1px solid #ccc; background: #fff; cursor: pointer; }
+
+    /* 제어 패널 스타일 */
+    .control-panel { background: #fff; padding: 12px; border-radius: 8px; border: 1px solid #ddd; margin-top: 10px; display: flex; flex-direction: column; gap: 10px; }
+    .panel-title { font-size: 13px; font-weight: bold; color: #555; margin-bottom: 2px; }
+    
+    /* 실시간 타임스탬프 표시 영역 */
+    .timestamp-display { font-size: 16px; font-weight: bold; color: #1d1d1f; font-family: monospace; background: #eef2f7; padding: 6px 12px; border-radius: 6px; display: inline-block; }
+
+    .ctrl-btn-group { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+    .ctrl-btn { padding: 8px 10px; font-size: 12px; background: #4a4a4a; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; white-space: nowrap; }
+    .ctrl-btn:disabled { background: #ccc; cursor: not-allowed; }
+    .ctrl-btn.active { background: #e63946; }
+
     .btn-group { margin-top: 15px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
-    button { padding: 12px 18px; font-size: 15px; border-radius: 6px; border: none; background: #007aff; color: white; font-weight: bold; cursor: pointer; flex: 1; min-width: 120px; }
+    button { padding: 12px 18px; font-size: 15px; border-radius: 6px; border: none; background: #007aff; color: white; font-weight: bold; cursor: pointer; flex: 1; min-width: 100px; }
     button:disabled { background: #ccc; cursor: not-allowed; }
+    #saveBtn { background: #ff9500; }
+    #saveBtn:disabled { background: #ccc; }
+    
     input[type="file"] { display: none; }
     .custom-file-upload { display: inline-block; padding: 12px 20px; background: #34c759; color: white; font-weight: bold; border-radius: 6px; cursor: pointer; margin-bottom: 10px; width: 100%; }
+    
+    .legend-box { display: flex; justify-content: center; align-items: center; gap: 12px; font-size: 12px; margin-top: 6px; background: #eee; padding: 6px; border-radius: 6px; }
+    .legend-item { display: flex; align-items: center; gap: 4px; font-weight: bold; }
+    .color-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+
+    footer { margin-top: 35px; padding-top: 15px; border-top: 1px solid #ddd; }
+    .youtube-link { display: inline-flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; color: #007aff; font-weight: bold; font-size: 14px; padding: 10px 16px; border-radius: 20px; background: #fff; border: 1px solid #eee; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: all 0.2s; }
+    .youtube-link:hover { background: #f0f7ff; transform: translateY(-1px); }
+    .youtube-icon { width: 22px; height: 16px; fill: #FF0000; }
+    .yt-label { font-size: 11px; background: #ff2d55; color: white; padding: 2px 6px; border-radius: 10px; margin-left: 4px; font-weight: 800; }
   </style>
 </head>
 <body>
   <div class="container">
-    <h2>🎥 비디오 궤적 추적기</h2>
-    <div id="status" class="status">⏳ OpenCV 라이브러리를 불러오는 중입니다...</div>
+    <h2>🏋️‍♂️ Crossfit Move Tracker</h2>
+    <div id="status" class="status">⏳ 필요한 라이브러리를 불러오는 중입니다...</div>
     
-    <label for="fileInput" class="custom-file-upload" id="fileLabel" style="opacity:0.5; pointer-events:none;">
+    <label for="fileInput" class="custom-file-upload" id="fileLabel">
       📁 영상 파일 선택
     </label>
     <input type="file" id="fileInput" accept="video/*">
     
+    <div class="select-group">
+      <div class="select-row">
+        <label for="modeSelect">추적 방식:</label>
+        <select id="modeSelect">
+          <option value="ai">🤖 AI 관절 자동 추적</option>
+          <option value="manual">🎯 내가 원하는 점 직접 클릭 추적</option>
+        </select>
+      </div>
+      
+      <div class="select-row" id="jointRow">
+        <label for="jointSelect">추적할 관절:</label>
+        <select id="jointSelect">
+          <option value="feet">🦶 발끝 (토투바, 더블언더)</option>
+          <option value="wrists">🏋️‍♂️ 손목 (스내치, 클린, 리프팅)</option>
+          <option value="head">🗣️ 턱/머리 (풀업, 체스트투바)</option>
+          <option value="hips">🦵 골반 (스쿼트, 점프)</option>
+        </select>
+      </div>
+
+      <div class="select-row" id="angleRow">
+        <label for="angleSelect">📐 측정할 관절 각도:</label>
+        <select id="angleSelect">
+          <option value="none">사용 안 함</option>
+          <option value="knee">🦵 무릎 각도 (스쿼트 깊이)</option>
+          <option value="elbow">💪 팔꿈치 각도 (프레스/풀업)</option>
+          <option value="hip">🧘‍♂️ 골반/힙 각도 (데드리프트)</option>
+        </select>
+      </div>
+
+      <div class="select-row">
+        <label for="speedSelect">⚡ 재생/추적 속도:</label>
+        <select id="speedSelect">
+          <option value="0.25">0.25x (매우 천천히)</option>
+          <option value="0.5" selected>0.5x (슬로우 - 권장)</option>
+          <option value="1.0">1.0x (일반 속도)</option>
+          <option value="1.5">1.5x (빠르게)</option>
+          <option value="2.0">2.0x (매우 빠르게)</option>
+        </select>
+      </div>
+
+      <div class="legend-box">
+        <span style="font-weight: bold; margin-right: 4px;">속도 궤적(Heatmap):</span>
+        <span class="legend-item"><span class="color-dot" style="background:#0000FF;"></span>느림</span>
+        <span class="legend-item"><span class="color-dot" style="background:#00FF00;"></span>보통</span>
+        <span class="legend-item"><span class="color-dot" style="background:#FF0000;"></span>빠름</span>
+      </div>
+    </div>
+
+    <!-- 영상 프레임 조작, 타임스탬프 및 A-B Loop 제어 패널 -->
+    <div class="control-panel">
+      <div class="panel-title">🎬 재생 중인 시간 / 전체 시간</div>
+      
+      <!-- 실시간 타임스탬프 표시 -->
+      <div>
+        <span id="timestampDisplay" class="timestamp-display">⏱️ 00:00.0 / 00:00.0</span>
+      </div>
+
+      <!-- 수정 완료: 문구 단순화 -->
+      <div class="ctrl-btn-group">
+        <button id="prevFrameBtn" class="ctrl-btn" disabled>◀ 1프레임</button>
+        <button id="nextFrameBtn" class="ctrl-btn" disabled>1프레임 ▶</button>
+        <button id="setLoopABtn" class="ctrl-btn" disabled>반복구간 시작</button>
+        <button id="setLoopBBtn" class="ctrl-btn" disabled>반복구간 종료</button>
+        <button id="toggleLoopBtn" class="ctrl-btn" disabled>🔁 구간반복 OFF</button>
+      </div>
+    </div>
+
     <div class="canvas-wrapper">
       <canvas id="canvasOutput"></canvas>
     </div>
     
     <div class="btn-group">
       <button id="startBtn" disabled>추적 시작</button>
+      <button id="saveBtn" disabled>📷 이미지 저장</button>
       <button id="resetBtn" disabled>초기화</button>
     </div>
+
+    <footer>
+      <a id="youtubeAnchor" href="https://www.youtube.com/@1990kgcrossfit/shorts" target="_blank" rel="noopener noreferrer" class="youtube-link">
+        <svg class="youtube-icon" viewBox="0 0 24 17">
+          <path d="M23.498 2.616a3.016 3.016 0 0 0-2.122-2.136C19.505 0 12 0 12 0s-7.505 0-9.377.48C1.251.96.48 1.731.241 3.107 0 4.982 0 8.5 0 8.5s0 3.518.241 5.393c.239 1.376 1.01 2.147 2.382 2.387C4.495 17 12 17 12 17s7.505 0 9.377-.48a3.015 3.015 0 0 0 2.122-2.137C24 12.503 24 8.5 24 8.5s0-3.518-.502-5.884zM9.545 12.068V4.932L15.818 8.5l-6.273 3.568z"/>
+        </svg>
+        <span id="ytText">🩳 최신 Shorts 연결 중...</span>
+      </a>
+    </footer>
   </div>
 
   <video id="videoInput" style="display:none;" playsinline muted webkit-playsinline></video>
+  <canvas id="templateCanvas" style="display:none;"></canvas>
 
   <script>
-    let video = document.getElementById('videoInput');
-    let canvas = document.getElementById('canvasOutput');
-    let ctx = canvas.getContext('2d');
-    let fileInput = document.getElementById('fileInput');
-    let fileLabel = document.getElementById('fileLabel');
-    let startBtn = document.getElementById('startBtn');
-    let resetBtn = document.getElementById('resetBtn');
-    let statusText = document.getElementById('status');
+    const video = document.getElementById('videoInput');
+    const canvas = document.getElementById('canvasOutput');
+    const ctx = canvas.getContext('2d', { alpha: false });
+    const templateCanvas = document.getElementById('templateCanvas');
+    const tCtx = templateCanvas.getContext('2d', { alpha: false });
 
-    let points = [];
+    const fileInput = document.getElementById('fileInput');
+    const startBtn = document.getElementById('startBtn');
+    const saveBtn = document.getElementById('saveBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const statusText = document.getElementById('status');
+    const modeSelect = document.getElementById('modeSelect');
+    const jointSelect = document.getElementById('jointSelect');
+    const jointRow = document.getElementById('jointRow');
+    const angleSelect = document.getElementById('angleSelect');
+    const angleRow = document.getElementById('angleRow');
+    const speedSelect = document.getElementById('speedSelect');
+    const youtubeAnchor = document.getElementById('youtubeAnchor');
+    const ytText = document.getElementById('ytText');
+
+    const timestampDisplay = document.getElementById('timestampDisplay');
+    const prevFrameBtn = document.getElementById('prevFrameBtn');
+    const nextFrameBtn = document.getElementById('nextFrameBtn');
+    const setLoopABtn = document.getElementById('setLoopABtn');
+    const setLoopBBtn = document.getElementById('setLoopBBtn');
+    const toggleLoopBtn = document.getElementById('toggleLoopBtn');
+
     let trajectory = [];
     let isTracking = false;
-    let cap, frame, gray, prevGray, pointMat, nextPointMat, statusMat, errMat;
+    let poseModel = null;
+    let templateData = null;
+    let lastPoint = null;
+    let currentAngle = null;
+    let currentAnglePt = null;
 
-    function onOpenCvReady() {
+    // 성능 최적화: AI 프레임 연산 제어 카운터
+    let frameCounter = 0;
+    let isProcessingPose = false;
+
+    let loopATime = null;
+    let loopBTime = null;
+    let isLoopEnabled = false;
+
+    const FRAME_TIME = 1 / 30;
+
+    const JOINT_MAP = {
+      feet: [31, 32],
+      wrists: [15, 16],
+      head: [0],
+      hips: [23, 24]
+    };
+
+    function formatTime(seconds) {
+      if (isNaN(seconds) || seconds === null) return "00:00.0";
+      const mins = Math.floor(seconds / 60);
+      const secs = (seconds % 60).toFixed(1);
+      const formattedMins = String(mins).padStart(2, '0');
+      const formattedSecs = String(secs).padStart(4, '0');
+      return `${formattedMins}:${formattedSecs}`;
+    }
+
+    function updateTimestampUI() {
+      const current = formatTime(video.currentTime);
+      const total = formatTime(video.duration);
+      timestampDisplay.innerText = `⏱️ ${current} / ${total}`;
+    }
+
+    async function fetchLatestShorts() {
+      const targetRss = 'https://www.youtube.com/feeds/videos.xml?user=1990kgcrossfit';
+      const proxyList = [
+        `https://api.cors.lol/?url=${encodeURIComponent(targetRss)}`,
+        `https://corsproxy.io/?${encodeURIComponent(targetRss)}`
+      ];
+
+      for (let url of proxyList) {
+        try {
+          const res = await fetch(url);
+          const xmlText = await res.text();
+          const parser = new DOMParser();
+          const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+          const entries = xmlDoc.getElementsByTagName("entry");
+
+          if (entries && entries.length > 0) {
+            const latestVideoId = entries[0].getElementsByTagName("yt:videoId")[0]?.textContent;
+            if (latestVideoId) {
+              youtubeAnchor.href = `https://www.youtube.com/shorts/${latestVideoId.trim()}`;
+              ytText.innerHTML = `🩳 최신 Shorts 바로재생 <span class="yt-label">PLAY</span>`;
+              return;
+            }
+          }
+        } catch (e) {
+          console.warn("Proxy 시도 실패, 대안 시도 중:", e);
+        }
+      }
+
+      youtubeAnchor.href = "https://www.youtube.com/@1990kgcrossfit/shorts";
+      ytText.innerText = "🩳 최신 Shorts 보러가기";
+    }
+
+    function initPose() {
+      poseModel = new Pose({
+        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
+      });
+      // 최적화: Lite 모델급 연산 스펙 세팅
+      poseModel.setOptions({
+        modelComplexity: 0,
+        smoothLandmarks: false,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5
+      });
+      poseModel.onResults(onPoseResults);
       statusText.innerText = "✅ 준비 완료! 아래 버튼을 눌러 영상을 선택하세요.";
-      fileLabel.style.opacity = "1";
-      fileLabel.style.pointerEvents = "auto";
+    }
+
+    modeSelect.addEventListener('change', () => {
+      const isAi = (modeSelect.value === 'ai');
+      jointRow.style.display = isAi ? 'flex' : 'none';
+      angleRow.style.display = isAi ? 'flex' : 'none';
+      updateStatusGuide();
+    });
+
+    speedSelect.addEventListener('change', () => {
+      if (video) video.playbackRate = parseFloat(speedSelect.value);
+    });
+
+    function updateStatusGuide() {
+      if (!video.src) return;
+
+      if (modeSelect.value === 'ai') {
+        statusText.innerText = "👉 관절 및 각도 설정 후 '추적 시작' 버튼을 누르세요.";
+        startBtn.disabled = false;
+      } else {
+        if (trajectory.length === 0) {
+          statusText.innerText = "👉 영상 화면에서 추적하고 싶은 위치를 터치해 점을 찍으세요.";
+          startBtn.disabled = true;
+        } else {
+          statusText.innerText = "🔴 점 선택 완료! '추적 시작' 버튼을 누르세요.";
+          startBtn.disabled = false;
+        }
+      }
     }
 
     fileInput.addEventListener('change', (e) => {
@@ -68,31 +304,103 @@
 
       statusText.innerText = "🎥 영상을 불러오는 중...";
       startBtn.disabled = true;
-      points = [];
+      saveBtn.disabled = true;
       trajectory = [];
+      templateData = null;
+      loopATime = null;
+      loopBTime = null;
+      isLoopEnabled = false;
+
+      setLoopABtn.innerText = `반복구간 시작`;
+      setLoopBBtn.innerText = `반복구간 종료`;
+      toggleLoopBtn.classList.remove('active');
+      toggleLoopBtn.innerText = `🔁 구간반복 OFF`;
 
       video.src = URL.createObjectURL(file);
-      
-      video.onloadeddata = () => {
+
+      video.onloadedmetadata = () => {
+        // 성능 최적화: 가로 최대 해상도 제한 (480px)
+        let scale = Math.min(1, 480 / Math.max(video.videoWidth, video.videoHeight));
+        canvas.width = Math.floor(video.videoWidth * scale);
+        canvas.height = Math.floor(video.videoHeight * scale);
+        templateCanvas.width = canvas.width;
+        templateCanvas.height = canvas.height;
         video.currentTime = 0;
+
+        prevFrameBtn.disabled = false;
+        nextFrameBtn.disabled = false;
+        setLoopABtn.disabled = false;
+        setLoopBBtn.disabled = false;
+        updateTimestampUI();
       };
 
       video.onseeked = () => {
-        // [수정 포인트] 비디오태그의 너비/높이 속성을 명시적으로 해상도와 일치시킴
-        video.width = video.videoWidth;
-        video.height = video.videoHeight;
-        
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        statusText.innerText = "👉 영상 위에서 추적할 꼭지점을 터치/클릭하세요.";
+        drawTrajectory();
+        updateStatusGuide();
+        updateTimestampUI();
         resetBtn.disabled = false;
       };
     });
 
+    prevFrameBtn.addEventListener('click', () => {
+      if (!video.src) return;
+      video.pause();
+      video.currentTime = Math.max(0, video.currentTime - FRAME_TIME);
+    });
+
+    nextFrameBtn.addEventListener('click', () => {
+      if (!video.src) return;
+      video.pause();
+      video.currentTime = Math.min(video.duration, video.currentTime + FRAME_TIME);
+    });
+
+    setLoopABtn.addEventListener('click', () => {
+      if (!video.src) return;
+      loopATime = video.currentTime;
+      setLoopABtn.innerText = `[A] ${loopATime.toFixed(1)}s 시작`;
+      checkLoopReady();
+    });
+
+    setLoopBBtn.addEventListener('click', () => {
+      if (!video.src) return;
+      loopBTime = video.currentTime;
+      setLoopBBtn.innerText = `[B] ${loopBTime.toFixed(1)}s 종료`;
+      checkLoopReady();
+    });
+
+    function checkLoopReady() {
+      if (loopATime !== null && loopBTime !== null && loopBTime > loopATime) {
+        toggleLoopBtn.disabled = false;
+      } else {
+        toggleLoopBtn.disabled = true;
+      }
+    }
+
+    toggleLoopBtn.addEventListener('click', () => {
+      isLoopEnabled = !isLoopEnabled;
+      if (isLoopEnabled) {
+        toggleLoopBtn.classList.add('active');
+        toggleLoopBtn.innerText = `🔁 구간반복 ON`;
+        video.currentTime = loopATime;
+      } else {
+        toggleLoopBtn.classList.remove('active');
+        toggleLoopBtn.innerText = `🔁 구간반복 OFF`;
+      }
+    });
+
+    video.addEventListener('timeupdate', () => {
+      updateTimestampUI();
+
+      if (isLoopEnabled && loopATime !== null && loopBTime !== null) {
+        if (video.currentTime >= loopBTime) {
+          video.currentTime = loopATime;
+        }
+      }
+    });
+
     function handleSelectPoint(e) {
-      if (isTracking || !video.src || canvas.width === 0) return;
+      if (modeSelect.value !== 'manual' || isTracking || !video.src || canvas.width === 0) return;
       e.preventDefault();
 
       const rect = canvas.getBoundingClientRect();
@@ -105,131 +413,329 @@
       const x = (clientX - rect.left) * scaleX;
       const y = (clientY - rect.top) * scaleY;
 
-      points = [{ x: x, y: y }];
-      trajectory = [{ x: x, y: y }];
+      lastPoint = { x: x, y: y, speed: 0 };
+      trajectory = [lastPoint];
 
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      ctx.beginPath();
-      ctx.arc(x, y, Math.max(6, canvas.width / 100), 0, 2 * Math.PI);
-      ctx.fillStyle = 'red';
-      ctx.fill();
+      drawTrajectory();
 
-      statusText.innerText = "🔴 점 선택 완료! '추적 시작' 버튼을 누르세요.";
-      startBtn.disabled = false;
+      const patchSize = 16;
+      tCtx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      
+      const px = Math.max(0, Math.min(canvas.width - patchSize, Math.floor(x - patchSize / 2)));
+      const py = Math.max(0, Math.min(canvas.height - patchSize, Math.floor(y - patchSize / 2)));
+      
+      templateData = {
+        patch: tCtx.getImageData(px, py, patchSize, patchSize),
+        width: patchSize,
+        height: patchSize
+      };
+
+      updateStatusGuide();
     }
 
     canvas.addEventListener('click', handleSelectPoint);
     canvas.addEventListener('touchstart', handleSelectPoint);
 
     startBtn.addEventListener('click', async () => {
-      if (points.length === 0) return;
+      if (!video.src) return;
 
-      try {
-        await video.play();
-
-        // [수정 포인트] 화면 크기가 완전히 확정된 후에 추적 상자를 생성하도록 조정
-        let vw = video.videoWidth;
-        let vh = video.videoHeight;
-
-        video.width = vw;
-        video.height = vh;
-        canvas.width = vw;
-        canvas.height = vh;
-
-        cap = new cv.VideoCapture(video);
-        frame = new cv.Mat(vh, vw, cv.CV_8UC4);
-        gray = new cv.Mat(vh, vw, cv.CV_8UC1);
-        prevGray = new cv.Mat(vh, vw, cv.CV_8UC1);
-        
-        pointMat = cv.matFromArray(1, 1, cv.CV_32FC2, [points[0].x, points[0].y]);
-        nextPointMat = new cv.Mat();
-        statusMat = new cv.Mat();
-        errMat = new cv.Mat();
-
-        cap.read(frame);
-        cv.cvtColor(frame, prevGray, cv.COLOR_RGBA2GRAY);
-
-        isTracking = true;
-        statusText.innerText = "▶️ 추적 진행 중...";
-        startBtn.disabled = true;
-
-        requestAnimationFrame(processVideo);
-      } catch (err) {
-        console.error(err);
-        statusText.innerText = "❌ 추적 시작 중 오류: " + err.message;
-      }
-    });
-
-    function processVideo() {
-      if (!isTracking || video.paused || video.ended) {
-        if (video.ended) statusText.innerText = "🎉 추적 완료!";
+      if (modeSelect.value === 'manual' && trajectory.length === 0) {
+        statusText.innerText = "⚠️ 먼저 영상 위의 추적할 지점을 터치해 주세요!";
         return;
       }
 
+      isTracking = true;
+      startBtn.disabled = true;
+      saveBtn.disabled = true;
+      statusText.innerText = `▶️ 궤적 추적 진행 중... (${speedSelect.value}배속)`;
+
+      video.playbackRate = parseFloat(speedSelect.value);
+      video.currentTime = (isLoopEnabled && loopATime !== null) ? loopATime : 0;
+
       try {
-        cap.read(frame);
-        if (!frame.empty()) {
-          cv.cvtColor(frame, gray, cv.COLOR_RGBA2GRAY);
-
-          let winSize = new cv.Size(15, 15);
-          let maxLevel = 2;
-          let criteria = new cv.TermCriteria(cv.TERM_CRITERIA_EPS | cv.TERM_CRITERIA_COUNT, 10, 0.03);
-          
-          cv.calcOpticalFlowPyrLK(prevGray, gray, pointMat, nextPointMat, statusMat, errMat, winSize, maxLevel, criteria);
-
-          if (statusMat.data[0] === 1) {
-            let newX = nextPointMat.data32F[0];
-            let newY = nextPointMat.data32F[1];
-            
-            trajectory.push({ x: newX, y: newY });
-
-            pointMat.delete();
-            pointMat = cv.matFromArray(1, 1, cv.CV_32FC2, [newX, newY]);
-          }
-
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-          drawTrajectory();
-
-          gray.copyTo(prevGray);
-        }
+        await video.play();
       } catch (err) {
-        console.error(err);
+        console.error("재생 오류:", err);
       }
 
-      requestAnimationFrame(processVideo);
+      if (modeSelect.value === 'ai') {
+        trajectory = [];
+        frameCounter = 0;
+        isProcessingPose = false;
+        requestAnimationFrame(processAiFrame);
+      } else {
+        requestAnimationFrame(processManualFrame);
+      }
+    });
+
+    function calculateAngle(p1, p2, p3) {
+      if (!p1 || !p2 || !p3) return null;
+      const radians = Math.atan2(p3.y - p2.y, p3.x - p2.x) - Math.atan2(p1.y - p2.y, p1.x - p2.x);
+      let angle = Math.abs((radians * 180.0) / Math.PI);
+      if (angle > 180.0) angle = 360.0 - angle;
+      return Math.round(angle);
+    }
+
+    // 성능 최적화: 2프레임당 1회 연산 (Frame Throttling 적용)
+    async function processAiFrame() {
+      if (!isTracking || video.paused || video.ended) {
+        if (video.ended) finishTracking();
+        return;
+      }
+
+      frameCounter++;
+      if (frameCounter % 2 === 0 && !isProcessingPose) {
+        isProcessingPose = true;
+        await poseModel.send({ image: video });
+        isProcessingPose = false;
+      } else {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        drawTrajectory();
+      }
+
+      if (!video.ended) requestAnimationFrame(processAiFrame);
+    }
+
+    function onPoseResults(results) {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      if (results.poseLandmarks) {
+        const lm = results.poseLandmarks;
+        const targetIndices = JOINT_MAP[jointSelect.value];
+
+        let sumX = 0, sumY = 0, validCount = 0;
+
+        targetIndices.forEach(idx => {
+          if (lm[idx] && lm[idx].visibility > 0.3) {
+            sumX += lm[idx].x * canvas.width;
+            sumY += lm[idx].y * canvas.height;
+            validCount++;
+          }
+        });
+
+        if (validCount > 0) {
+          const currX = sumX / validCount;
+          const currY = sumY / validCount;
+          let speed = 0;
+
+          if (trajectory.length > 0) {
+            const prev = trajectory[trajectory.length - 1];
+            speed = Math.hypot(currX - prev.x, currY - prev.y);
+          }
+
+          trajectory.push({ x: currX, y: currY, speed: speed });
+        }
+
+        const angleType = angleSelect.value;
+        currentAngle = null;
+        currentAnglePt = null;
+
+        if (angleType !== 'none') {
+          let p1, p2, p3;
+          if (angleType === 'knee') {
+            p1 = lm[23] || lm[24]; p2 = lm[25] || lm[26]; p3 = lm[27] || lm[28];
+          } else if (angleType === 'elbow') {
+            p1 = lm[11] || lm[12]; p2 = lm[13] || lm[14]; p3 = lm[15] || lm[16];
+          } else if (angleType === 'hip') {
+            p1 = lm[11] || lm[12]; p2 = lm[23] || lm[24]; p3 = lm[25] || lm[26];
+          }
+
+          if (p1 && p2 && p3 && p1.visibility > 0.3 && p2.visibility > 0.3 && p3.visibility > 0.3) {
+            const pt1 = { x: p1.x * canvas.width, y: p1.y * canvas.height };
+            const pt2 = { x: p2.x * canvas.width, y: p2.y * canvas.height };
+            const pt3 = { x: p3.x * canvas.width, y: p3.y * canvas.height };
+
+            currentAngle = calculateAngle(pt1, pt2, pt3);
+            currentAnglePt = pt2;
+
+            ctx.beginPath();
+            ctx.moveTo(pt1.x, pt1.y);
+            ctx.lineTo(pt2.x, pt2.y);
+            ctx.lineTo(pt3.x, pt3.y);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+          }
+        }
+      }
+      drawTrajectory();
+    }
+
+    function processManualFrame() {
+      if (!isTracking || video.paused || video.ended) {
+        if (video.ended) finishTracking();
+        return;
+      }
+
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      tCtx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      if (lastPoint && templateData) {
+        const searchMargin = 20;
+        const tw = templateData.width;
+        const th = templateData.height;
+
+        const searchX = Math.max(0, Math.floor(lastPoint.x - tw / 2 - searchMargin));
+        const searchY = Math.max(0, Math.floor(lastPoint.y - th / 2 - searchMargin));
+        const searchW = Math.min(canvas.width - searchX, tw + searchMargin * 2);
+        const searchH = Math.min(canvas.height - searchY, th + searchMargin * 2);
+
+        const currentFrameData = tCtx.getImageData(searchX, searchY, searchW, searchH);
+        const matchPos = fastMatchTemplate(currentFrameData, templateData.patch);
+
+        if (matchPos) {
+          const newX = searchX + matchPos.x + tw / 2;
+          const newY = searchY + matchPos.y + th / 2;
+          const speed = Math.hypot(newX - lastPoint.x, newY - lastPoint.y);
+          
+          lastPoint = { x: newX, y: newY, speed: speed };
+          trajectory.push(lastPoint);
+        }
+      }
+
+      drawTrajectory();
+      requestAnimationFrame(processManualFrame);
+    }
+
+    // 성능 최적화: 매칭 탐색 스킵 간격 보정 (8px 피치)
+    function fastMatchTemplate(searchImg, tplImg) {
+      const sw = searchImg.width, sh = searchImg.height;
+      const tw = tplImg.width, th = tplImg.height;
+      let minDiff = Infinity, bestX = 0, bestY = 0;
+
+      const sData = searchImg.data, tData = tplImg.data;
+
+      for (let y = 0; y <= sh - th; y += 2) {
+        for (let x = 0; x <= sw - tw; x += 2) {
+          let diff = 0;
+          for (let ty = 0; ty < th; ty += 8) {
+            for (let tx = 0; tx < tw; tx += 8) {
+              const sIdx = ((y + ty) * sw + (x + tx)) << 2;
+              const tIdx = ((ty * tw) + tx) << 2;
+              diff += Math.abs(sData[sIdx] - tData[tIdx]) +
+                      Math.abs(sData[sIdx + 1] - tData[tIdx + 1]) +
+                      Math.abs(sData[sIdx + 2] - tData[tIdx + 2]);
+            }
+          }
+          if (diff < minDiff) {
+            minDiff = diff; bestX = x; bestY = y;
+          }
+        }
+      }
+      return { x: bestX, y: bestY };
+    }
+
+    function getSpeedColor(speed) {
+      const maxSpeed = 12.0;
+      const ratio = Math.min(1.0, speed / maxSpeed);
+
+      if (ratio < 0.5) {
+        const g = Math.floor(255 * (ratio * 2));
+        const b = Math.floor(255 * (1 - ratio * 2));
+        return `rgb(0, ${g}, ${b})`;
+      } else {
+        const r = Math.floor(255 * ((ratio - 0.5) * 2));
+        const g = Math.floor(255 * (1 - (ratio - 0.5) * 2));
+        return `rgb(${r}, ${g}, 0)`;
+      }
     }
 
     function drawTrajectory() {
-      if (trajectory.length < 2) return;
+      if (trajectory.length === 0) return;
 
-      let lineThickness = Math.max(2, canvas.width / 200);
+      const lineThickness = Math.max(3, canvas.width / 180);
 
-      ctx.beginPath();
-      ctx.moveTo(trajectory[0].x, trajectory[0].y);
-      for (let i = 1; i < trajectory.length; i++) {
-        ctx.lineTo(trajectory[i].x, trajectory[i].y);
+      if (trajectory.length > 1) {
+        for (let i = 1; i < trajectory.length; i++) {
+          ctx.beginPath();
+          ctx.moveTo(trajectory[i - 1].x, trajectory[i - 1].y);
+          ctx.lineTo(trajectory[i].x, trajectory[i].y);
+          
+          ctx.strokeStyle = getSpeedColor(trajectory[i].speed);
+          ctx.lineWidth = lineThickness;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.stroke();
+        }
       }
-      ctx.strokeStyle = '#FF0000';
-      ctx.lineWidth = lineThickness;
-      ctx.stroke();
 
-      let lastPt = trajectory[trajectory.length - 1];
+      const lastPt = trajectory[trajectory.length - 1];
       ctx.beginPath();
       ctx.arc(lastPt.x, lastPt.y, lineThickness * 1.5, 0, 2 * Math.PI);
       ctx.fillStyle = '#00FF00';
       ctx.fill();
+
+      if (currentAngle !== null && currentAnglePt !== null) {
+        ctx.fillStyle = '#FFFF00';
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 3;
+        ctx.font = `bold ${Math.max(16, Math.floor(canvas.width / 25))}px sans-serif`;
+        
+        const text = `${currentAngle}°`;
+        const textX = currentAnglePt.x + 10;
+        const textY = currentAnglePt.y - 10;
+        
+        ctx.strokeText(text, textX, textY);
+        ctx.fillText(text, textX, textY);
+      }
     }
+
+    function finishTracking() {
+      statusText.innerText = "🎉 궤적 추적 완료! '이미지 저장'을 눌러 결과를 저장해 보세요.";
+      saveBtn.disabled = false;
+    }
+
+    saveBtn.addEventListener('click', () => {
+      try {
+        const imageURI = canvas.toDataURL('image/png');
+        const link = document.createElement('a');
+        const now = new Date();
+        const timeStamp = `${now.getMonth()+1}${now.getDate()}_${now.getHours()}${now.getMinutes()}`;
+        
+        link.download = `crossfit_move_${timeStamp}.png`;
+        link.href = imageURI;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        statusText.innerText = "💾 이미지가 저장되었습니다!";
+      } catch (err) {
+        console.error(err);
+        statusText.innerText = "❌ 저장 실패: 브라우저 권한을 확인하세요.";
+      }
+    });
 
     resetBtn.addEventListener('click', () => {
       isTracking = false;
       video.pause();
       video.currentTime = 0;
-      points = [];
       trajectory = [];
+      templateData = null;
+      lastPoint = null;
+      currentAngle = null;
+      currentAnglePt = null;
+      loopATime = null;
+      loopBTime = null;
+      isLoopEnabled = false;
+
+      setLoopABtn.innerText = `반복구간 시작`;
+      setLoopBBtn.innerText = `반복구간 종료`;
+      toggleLoopBtn.classList.remove('active');
+      toggleLoopBtn.innerText = `🔁 구간반복 OFF`;
+      toggleLoopBtn.disabled = true;
+
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      statusText.innerText = "초기화되었습니다. 영상을 다시 선택하세요.";
+      statusText.innerText = "초기화되었습니다. 다시 영상을 선택하거나 점을 지정하세요.";
       startBtn.disabled = true;
+      saveBtn.disabled = true;
+      updateTimestampUI();
     });
+
+    window.onload = () => {
+      initPose();
+      fetchLatestShorts();
+    };
   </script>
 </body>
 </html>
