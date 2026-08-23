@@ -112,7 +112,7 @@
         <span class="legend-item"><span class="color-dot" style="background:#FF0000;"></span>빨강(폭발적 고속)</span>
       </div>
       <div class="legend-box" style="margin-top: 4px; font-weight: bold;">
-        <span>🔝 TOP: 해당 구간 최고 속도 / ⚡ MAX: 전체 경로 최고 속도</span>
+        <span>🔝 TOP: 최고 높은 지점 / ⚡ MAX: 최고 가속 지점</span>
       </div>
     </div>
 
@@ -142,7 +142,7 @@
     </div>
 
     <footer>
-      <a id="youtubeAnchor" href="#" target="_blank" rel="noopener noreferrer" class="youtube-link">
+      <a id="youtubeAnchor" href="https://www.youtube.com/@1990kgcrossfit/shorts" target="_blank" rel="noopener noreferrer" class="youtube-link">
         <svg class="youtube-icon" viewBox="0 0 24 17">
           <path d="M23.498 2.616a3.016 3.016 0 0 0-2.122-2.136C19.505 0 12 0 12 0s-7.505 0-9.377.48C1.251.96.48 1.731.241 3.107 0 4.982 0 8.5 0 8.5s0 3.518.241 5.393c.239 1.376 1.01 2.147 2.382 2.387C4.495 17 12 17 12 17s7.505 0 9.377-.48a3.015 3.015 0 0 0 2.122-2.137C24 12.503 24 8.5 24 8.5s0-3.518-.502-5.884zM9.545 12.068V4.932L15.818 8.5l-6.273 3.568z"/>
         </svg>
@@ -154,19 +154,66 @@
   <video id="videoInput" style="display:none;" autoplay playsinline muted webkit-playsinline></video>
   <canvas id="templateCanvas" style="display:none;"></canvas>
 
-  <script>
-    const LATEST_SHORTS_ID = ""; 
+  <!-- Firebase v10 SDK 연동 모듈 스크립트 -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getFirestore, collection, addDoc, doc, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-    const youtubeAnchor = document.getElementById('youtubeAnchor');
+    // 사용자의 Firebase 프로젝트 콘솔 키 반영
+    const firebaseConfig = {
+      apiKey: "AIzaSyCvDf46RvXZRCiAHGn_Or9imm6ACAAfYEE",
+      authDomain: "cmt-visitor.firebaseapp.com",
+      databaseURL: "https://cmt-visitor-default-rtdb.firebaseio.com",
+      projectId: "cmt-visitor",
+      storageBucket: "cmt-visitor.firebasestorage.app",
+      messagingSenderId: "680857514705",
+      appId: "1:680857514705:web:0cabdd4d43673384320bf0",
+      measurementId: "G-PH8V4TPW6G"
+    };
 
-    function applyDirectShortsLink() {
-      if (LATEST_SHORTS_ID && LATEST_SHORTS_ID.trim() !== "") {
-        youtubeAnchor.href = `https://www.youtube.com/shorts/${LATEST_SHORTS_ID.trim()}`;
-      } else {
-        youtubeAnchor.href = "https://www.youtube.com/@1990kgcrossfit/shorts";
-      }
+    let db = null;
+
+    try {
+      const app = initializeApp(firebaseConfig);
+      db = getFirestore(app);
+      console.log("🔥 Firebase 초기화 완료");
+
+      // 1. 페이지 방문 로그 기록 (Firestore: 'visits' 컬렉션)
+      addDoc(collection(db, "visits"), {
+        timestamp: serverTimestamp(),
+        userAgent: navigator.userAgent
+      }).catch(e => console.warn("방문 기록 실패:", e));
+
+      // 2. Firestore에서 최신 유튜브 쇼츠 ID 불러오기 (컬렉션: config, 문서: youtube)
+      getDoc(doc(db, "config", "youtube")).then(snapshot => {
+        if (snapshot.exists() && snapshot.data().latestShortsId) {
+          const shortsId = snapshot.data().latestShortsId.trim();
+          const youtubeAnchor = document.getElementById('youtubeAnchor');
+          if (shortsId) {
+            youtubeAnchor.href = `https://www.youtube.com/shorts/${shortsId}`;
+          }
+        }
+      }).catch(e => console.warn("유튜브 쇼츠 ID 로드 실패:", e));
+
+    } catch (e) {
+      console.warn("Firebase 연동 오류:", e);
     }
 
+    // 전역 함수로 추적 로그 기록 저장
+    window.logTrackingEventToFirebase = function(trackingMode, jointType, angleType, speed) {
+      if (!db) return;
+      addDoc(collection(db, "tracking_logs"), {
+        timestamp: serverTimestamp(),
+        mode: trackingMode,
+        joint: jointType,
+        angle: angleType,
+        speed: speed
+      }).catch(e => console.warn("추적 로그 저장 실패:", e));
+    };
+  </script>
+
+  <!-- 메인 애플리케이션 스크립트 -->
+  <script>
     const video = document.getElementById('videoInput');
     const canvas = document.getElementById('canvasOutput');
     const ctx = canvas.getContext('2d', { alpha: false });
@@ -487,6 +534,10 @@
       saveBtn.disabled = true;
       saveVideoBtn.disabled = true;
       statusText.innerText = `▶️ 궤적 추적 진행 중... (${speedSelect.value}배속)`;
+
+      if (window.logTrackingEventToFirebase) {
+        window.logTrackingEventToFirebase(modeSelect.value, jointSelect.value, angleSelect.value, speedSelect.value);
+      }
 
       video.playbackRate = parseFloat(speedSelect.value);
       video.currentTime = (isLoopEnabled && loopATime !== null) ? loopATime : 0;
@@ -853,7 +904,6 @@
 
     window.onload = () => {
       initPose();
-      applyDirectShortsLink();
     };
   </script>
 </body>
