@@ -5,6 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Crossfit Move Tracker</title>
   
+  <!-- Google Analytics 4 (GA4) 트래킹 스크립트 -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-PH8V4TPW6G"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-PH8V4TPW6G');
+  </script>
+
   <!-- MediaPipe Pose 로드 -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
@@ -158,8 +168,8 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getFirestore, collection, addDoc, doc, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-analytics.js";
 
-    // 사용자의 Firebase 프로젝트 콘솔 키 반영
     const firebaseConfig = {
       apiKey: "AIzaSyCvDf46RvXZRCiAHGn_Or9imm6ACAAfYEE",
       authDomain: "cmt-visitor.firebaseapp.com",
@@ -172,19 +182,21 @@
     };
 
     let db = null;
+    let analytics = null;
 
     try {
       const app = initializeApp(firebaseConfig);
       db = getFirestore(app);
-      console.log("🔥 Firebase 초기화 완료");
+      analytics = getAnalytics(app);
+      console.log("🔥 Firebase 및 Analytics 초기화 완료");
 
-      // 1. 페이지 방문 로그 기록 (Firestore: 'visits' 컬렉션)
+      // 1. 페이지 방문 로그 기록 (Firestore)
       addDoc(collection(db, "visits"), {
         timestamp: serverTimestamp(),
         userAgent: navigator.userAgent
       }).catch(e => console.warn("방문 기록 실패:", e));
 
-      // 2. Firestore에서 최신 유튜브 쇼츠 ID 불러오기 (컬렉션: config, 문서: youtube)
+      // 2. Firestore에서 최신 유튜브 쇼츠 ID 불러오기
       getDoc(doc(db, "config", "youtube")).then(snapshot => {
         if (snapshot.exists() && snapshot.data().latestShortsId) {
           const shortsId = snapshot.data().latestShortsId.trim();
