@@ -809,8 +809,33 @@
       }
     }
 
+    // 🌟 수정된 워터마크 함수 (기존 크기의 10% 수준, 얇은 폰트, 요청하신 대소문자 반영)
+    function drawWatermark() {
+      const text = "Crossfit Move Tracker | @1990kg";
+      const fontSize = Math.max(9, Math.floor(canvas.width * 0.015)); // 글자 크기 약 1/10 수준 축소
+      
+      ctx.save();
+      // 폰트 두께 100(Thin) 및 가벼운 폰트 적용
+      ctx.font = `100 ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'bottom';
+
+      // 은은하고 얇은 획 테두리
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+      ctx.lineWidth = 1;
+      ctx.strokeText(text, canvas.width - 8, canvas.height - 6);
+
+      // 반투명 얇은 워터마크 본문
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+      ctx.fillText(text, canvas.width - 8, canvas.height - 6);
+      ctx.restore();
+    }
+
     function drawTrajectory() {
-      if (trajectory.length === 0) return;
+      if (trajectory.length === 0) {
+        drawWatermark();
+        return;
+      }
 
       const lineThickness = Math.max(3, canvas.width / 180);
 
@@ -877,6 +902,8 @@
         ctx.strokeText(text, currentAnglePt.x + 10, currentAnglePt.y - 10);
         ctx.fillText(text, currentAnglePt.x + 10, currentAnglePt.y - 10);
       }
+
+      drawWatermark();
     }
 
     // 이미지 저장
@@ -911,6 +938,7 @@
       recordedChunks = [];
       if (video.src) {
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        drawWatermark();
       } else {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
       }
