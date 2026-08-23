@@ -37,7 +37,8 @@
     button { padding: 12px 18px; font-size: 15px; border-radius: 6px; border: none; background: #007aff; color: white; font-weight: bold; cursor: pointer; flex: 1; min-width: 100px; }
     button:disabled { background: #ccc; cursor: not-allowed; }
     #saveBtn { background: #ff9500; }
-    #saveBtn:disabled { background: #ccc; }
+    #saveVideoBtn { background: #34c759; }
+    #saveBtn:disabled, #saveVideoBtn:disabled { background: #ccc; cursor: not-allowed; }
     
     input[type="file"] { display: none; }
     .custom-file-upload { display: inline-block; padding: 12px 20px; background: #34c759; color: white; font-weight: bold; border-radius: 6px; cursor: pointer; margin-bottom: 10px; width: 100%; }
@@ -93,7 +94,7 @@
       </div>
 
       <div class="select-row">
-        <label for="speedSelect">⚡ 재생/추적 속도:</label>
+        <label for="speedSelect">🧭 재생/추적 속도:</label>
         <select id="speedSelect">
           <option value="0.25">0.25x (매우 천천히)</option>
           <option value="0.5" selected>0.5x (슬로우 - 권장)</option>
@@ -109,6 +110,9 @@
         <span class="legend-item"><span class="color-dot" style="background:#00FF00;"></span>청록/초록(보통)</span>➔
         <span class="legend-item"><span class="color-dot" style="background:#FFFF00;"></span>노랑/주황(빠름)</span>➔
         <span class="legend-item"><span class="color-dot" style="background:#FF0000;"></span>빨강(폭발적 고속)</span>
+      </div>
+      <div class="legend-box" style="margin-top: 4px; font-weight: bold;">
+        <span>🔝 TOP: 해당 구간 최고 속도 / ⚡ MAX: 전체 경로 최고 속도</span>
       </div>
     </div>
 
@@ -133,11 +137,11 @@
     <div class="btn-group">
       <button id="startBtn" disabled>추적 시작</button>
       <button id="saveBtn" disabled>📷 이미지 저장</button>
+      <button id="saveVideoBtn" disabled>🎬 동영상 저장</button>
       <button id="resetBtn" disabled>초기화</button>
     </div>
 
     <footer>
-      <!-- 숏츠 직링크 연결 (반바지 이모지 제거 적용) -->
       <a id="youtubeAnchor" href="#" target="_blank" rel="noopener noreferrer" class="youtube-link">
         <svg class="youtube-icon" viewBox="0 0 24 17">
           <path d="M23.498 2.616a3.016 3.016 0 0 0-2.122-2.136C19.505 0 12 0 12 0s-7.505 0-9.377.48C1.251.96.48 1.731.241 3.107 0 4.982 0 8.5 0 8.5s0 3.518.241 5.393c.239 1.376 1.01 2.147 2.382 2.387C4.495 17 12 17 12 17s7.505 0 9.377-.48a3.015 3.015 0 0 0 2.122-2.137C24 12.503 24 8.5 24 8.5s0-3.518-.502-5.884zM9.545 12.068V4.932L15.818 8.5l-6.273 3.568z"/>
@@ -147,12 +151,11 @@
     </footer>
   </div>
 
-  <!-- autoplay 속성 추가됨 -->
   <video id="videoInput" style="display:none;" autoplay playsinline muted webkit-playsinline></video>
   <canvas id="templateCanvas" style="display:none;"></canvas>
 
   <script>
-    const LATEST_SHORTS_ID = "tNcphMNuoXo"; 
+    const LATEST_SHORTS_ID = ""; 
 
     const youtubeAnchor = document.getElementById('youtubeAnchor');
 
@@ -173,6 +176,7 @@
     const fileInput = document.getElementById('fileInput');
     const startBtn = document.getElementById('startBtn');
     const saveBtn = document.getElementById('saveBtn');
+    const saveVideoBtn = document.getElementById('saveVideoBtn');
     const resetBtn = document.getElementById('resetBtn');
     const statusText = document.getElementById('status');
     const modeSelect = document.getElementById('modeSelect');
@@ -196,6 +200,12 @@
     let lastPoint = null;
     let currentAngle = null;
     let currentAnglePt = null;
+
+    let maxSpeedPt = null;
+    let topPt = null;
+
+    let mediaRecorder = null;
+    let recordedChunks = [];
 
     let frameCounter = 0;
     let isProcessingPose = false;
@@ -270,7 +280,6 @@
       }
     }
 
-    // 영상 재생 중 캔버스를 실시간 업데이트하는 루프
     function renderPreviewLoop() {
       if (!isTracking && video.src && !video.paused && !video.ended) {
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -287,11 +296,14 @@
       statusText.innerText = "🎥 영상을 불러오는 중...";
       startBtn.disabled = true;
       saveBtn.disabled = true;
+      saveVideoBtn.disabled = true;
       trajectory = [];
       templateData = null;
       loopATime = null;
       loopBTime = null;
       isLoopEnabled = false;
+      maxSpeedPt = null;
+      topPt = null;
 
       setLoopABtn.innerText = `반복구간 시작`;
       setLoopBBtn.innerText = `반복구간 종료`;
@@ -314,7 +326,6 @@
         setLoopBBtn.disabled = false;
         updateTimestampUI();
 
-        // 💥 영상을 선택하자마자 자동으로 재생 시작
         video.play().then(() => {
           renderPreviewLoop();
         }).catch(err => {
@@ -407,6 +418,8 @@
 
       lastPoint = { x: x, y: y, speed: 0 };
       trajectory = [lastPoint];
+      maxSpeedPt = lastPoint;
+      topPt = lastPoint;
 
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       drawTrajectory();
@@ -429,6 +442,38 @@
     canvas.addEventListener('click', handleSelectPoint);
     canvas.addEventListener('touchstart', handleSelectPoint);
 
+    function startVideoRecording() {
+      recordedChunks = [];
+      try {
+        const stream = canvas.captureStream(30);
+        let options = { mimeType: 'video/webm;codecs=vp9' };
+        if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+          options = { mimeType: 'video/webm;codecs=vp8' };
+          if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+            options = { mimeType: 'video/webm' };
+            if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+              options = { mimeType: 'video/mp4' };
+            }
+          }
+        }
+        mediaRecorder = new MediaRecorder(stream, options);
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data && event.data.size > 0) {
+            recordedChunks.push(event.data);
+          }
+        };
+        mediaRecorder.start();
+      } catch (e) {
+        console.warn("녹화 시작 실패:", e);
+      }
+    }
+
+    function stopVideoRecording() {
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+      }
+    }
+
     startBtn.addEventListener('click', async () => {
       if (!video.src) return;
 
@@ -440,10 +485,16 @@
       isTracking = true;
       startBtn.disabled = true;
       saveBtn.disabled = true;
+      saveVideoBtn.disabled = true;
       statusText.innerText = `▶️ 궤적 추적 진행 중... (${speedSelect.value}배속)`;
 
       video.playbackRate = parseFloat(speedSelect.value);
       video.currentTime = (isLoopEnabled && loopATime !== null) ? loopATime : 0;
+
+      maxSpeedPt = null;
+      topPt = null;
+
+      startVideoRecording();
 
       try {
         await video.play();
@@ -467,6 +518,16 @@
       let angle = Math.abs((radians * 180.0) / Math.PI);
       if (angle > 180.0) angle = 360.0 - angle;
       return Math.round(angle);
+    }
+
+    function updateHighlights(pt) {
+      if (!pt) return;
+      if (!maxSpeedPt || pt.speed > maxSpeedPt.speed) {
+        maxSpeedPt = pt;
+      }
+      if (!topPt || pt.y < topPt.y) {
+        topPt = pt;
+      }
     }
 
     async function processAiFrame() {
@@ -515,7 +576,9 @@
             speed = Math.hypot(currX - prev.x, currY - prev.y);
           }
 
-          trajectory.push({ x: currX, y: currY, speed: speed });
+          const newPt = { x: currX, y: currY, speed: speed };
+          trajectory.push(newPt);
+          updateHighlights(newPt);
         }
 
         const angleType = angleSelect.value;
@@ -582,6 +645,7 @@
           
           lastPoint = { x: newX, y: newY, speed: speed };
           trajectory.push(lastPoint);
+          updateHighlights(lastPoint);
         }
       }
 
@@ -659,6 +723,40 @@
       ctx.fillStyle = '#00FF00';
       ctx.fill();
 
+      if (topPt) {
+        ctx.beginPath();
+        ctx.arc(topPt.x, topPt.y, lineThickness * 2, 0, 2 * Math.PI);
+        ctx.fillStyle = '#FF007F';
+        ctx.fill();
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        ctx.font = `bold ${Math.max(12, Math.floor(canvas.width / 32))}px sans-serif`;
+        ctx.fillStyle = '#FF007F';
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 2.5;
+        ctx.strokeText("🔝 TOP", topPt.x + 8, topPt.y - 8);
+        ctx.fillText("🔝 TOP", topPt.x + 8, topPt.y - 8);
+      }
+
+      if (maxSpeedPt && maxSpeedPt.speed > 2) {
+        ctx.beginPath();
+        ctx.arc(maxSpeedPt.x, maxSpeedPt.y, lineThickness * 2, 0, 2 * Math.PI);
+        ctx.fillStyle = '#FFD700';
+        ctx.fill();
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        ctx.font = `bold ${Math.max(12, Math.floor(canvas.width / 32))}px sans-serif`;
+        ctx.fillStyle = '#FFD700';
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 2.5;
+        ctx.strokeText("⚡ MAX", maxSpeedPt.x + 8, maxSpeedPt.y + 14);
+        ctx.fillText("⚡ MAX", maxSpeedPt.x + 8, maxSpeedPt.y + 14);
+      }
+
       if (currentAngle !== null && currentAnglePt !== null) {
         ctx.fillStyle = '#FFFF00';
         ctx.strokeStyle = '#000000';
@@ -675,8 +773,11 @@
     }
 
     function finishTracking() {
-      statusText.innerText = "🎉 궤적 추적 완료! '이미지 저장'을 눌러 결과를 저장해 보세요.";
+      isTracking = false;
+      stopVideoRecording();
+      statusText.innerText = "🎉 궤적 추적 완료! '이미지 저장' 또는 '동영상 저장' 버튼을 누르세요.";
       saveBtn.disabled = false;
+      saveVideoBtn.disabled = false;
     }
 
     saveBtn.addEventListener('click', () => {
@@ -699,8 +800,30 @@
       }
     });
 
+    saveVideoBtn.addEventListener('click', () => {
+      if (recordedChunks.length === 0) {
+        statusText.innerText = "⚠️ 녹화된 영상 데이터가 없습니다.";
+        return;
+      }
+      const blob = new Blob(recordedChunks, { type: recordedChunks[0].type || 'video/webm' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const now = new Date();
+      const timeStamp = `${now.getMonth()+1}${now.getDate()}_${now.getHours()}${now.getMinutes()}`;
+      
+      const ext = recordedChunks[0].type.includes('mp4') ? 'mp4' : 'webm';
+      link.download = `crossfit_move_${timeStamp}.${ext}`;
+      link.href = url;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      statusText.innerText = "🎬 동영상이 성공적으로 저장되었습니다!";
+    });
+
     resetBtn.addEventListener('click', () => {
       isTracking = false;
+      stopVideoRecording();
       video.pause();
       video.currentTime = 0;
       trajectory = [];
@@ -708,6 +831,8 @@
       lastPoint = null;
       currentAngle = null;
       currentAnglePt = null;
+      maxSpeedPt = null;
+      topPt = null;
       loopATime = null;
       loopBTime = null;
       isLoopEnabled = false;
@@ -722,6 +847,7 @@
       statusText.innerText = "초기화되었습니다. 다시 영상을 선택하거나 점을 지정하세요.";
       startBtn.disabled = true;
       saveBtn.disabled = true;
+      saveVideoBtn.disabled = true;
       updateTimestampUI();
     });
 
