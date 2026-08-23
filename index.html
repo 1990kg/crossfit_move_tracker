@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>비디오 궤적 추적기</title>
+  <script async src="https://docs.opencv.org/4.x/opencv.js" onload="onOpenCvReady();"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 15px; background-color: #f4f4f9; margin: 0; }
+    .container { max-width: 600px; margin: 0 auto; text-align: center; }
+    .status { font-weight: bold; color: #2b529a; margin: 12px 0; font-size: 15px; line-height: 1.4; }
+    .canvas-wrapper { position: relative; display: inline-block; width: 100%; margin-top: 10px; border: 2px solid #333; background: #000; border-radius: 8px; overflow: hidden; }
+    canvas { display: block; width: 100% !important; height: auto !important; cursor: crosshair; touch-action: none; }
+    .btn-group { margin-top: 15px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+    button { padding: 12px 18px; font-size: 15px; border-radius: 6px; border: none; background: #007aff; color: white; font-weight: bold; cursor: pointer; flex: 1; min-width: 120px; }
+    button:disabled { background: #ccc; cursor: not-allowed; }
+    input[type="file"] { display: none; }
+    .custom-file-upload { display: inline-block; padding: 12px 20px; background: #34c759; color: white; font-weight: bold; border-radius: 6px; cursor: pointer; margin-bottom: 10px; width: 100%; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>🎥 비디오 궤적 추적기</h2>
+    <div id="status" class="status">⏳ OpenCV 라이브러리를 불러오는 중입니다...</div>
+    
+    <label for="fileInput" class="custom-file-upload" id="fileLabel" style="opacity:0.5; pointer-events:none;">
+      📁 영상 파일 선택
+    </label>
+    <input type="file" id="fileInput" accept="video/*">
+    
+    <div class="canvas-wrapper">
+      <canvas id="canvasOutput"></canvas>
+    </div>
+    
+    <div class="btn-group">
+      <button id="startBtn" disabled>추적 시작</button>
+      <button id="resetBtn" disabled>초기화</button>
+    </div>
+  </div>
+
+  <video id="videoInput" style="display:none;" playsinline muted webkit-playsinline></video>
+
+  <script>
+    let video = document.getElementById('videoInput');
+    let canvas = document.getElementById('canvasOutput');
+    let ctx = canvas.getContext('2d');
+    let fileInput = document.getElementById('fileInput');
+    let fileLabel = document.getElementById('fileLabel');
+    let startBtn = document.getElementById('startBtn');
+    let resetBtn = document.getElementById('resetBtn');
+    let statusText = document.getElementById('status');
+
+    let points = [];
+    let trajectory = [];
+    let isTracking = false;
+    let cap, frame, gray, prevGray, pointMat, nextPointMat, statusMat, errMat;
+
+    function onOpenCvReady() {
+      statusText.innerText = "✅ 준비 완료! 아래 버튼을 눌러 영상을 선택하세요.";
+      fileLabel.style.opacity = "1";
+      fileLabel.style.pointerEvents = "auto";
+    }
+
+    fileInput.addEventListener('change', (e) => {
+      let file = e.target.files[0];
+      if (!file) return;
+
+      statusText.innerText = "🎥 영상을 불러오는 중...";
+      startBtn.disabled = true;
+      points = [];
+      trajectory = [];
+
+      video.src = URL.createObjectURL(file);
+      
+      video.onloadeddata = () => {
+        video.currentTime = 0;
+      };
+
+      video.onseeked = () => {
+        // [수정 포인트] 비디오태그의 너비/높이 속성을 명시적으로 해상도와 일치시킴
+        video.width = video.videoWidth;
+        video.height = video.videoHeight;
+        
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        statusText.innerText = "👉 영상 위에서 추적할 꼭지점을 터치/클릭하세요.";
+        resetBtn.disabled = false;
+      };
+    });
+
+    function handleSelectPoint(e) {
+      if (isTracking || !video.src || canvas.width === 0) return;
+      e.preventDefault();
+
+      const rect = canvas.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+
+      const x = (clientX - rect.left) * scaleX;
+      const y = (clientY - rect.top) * scaleY;
+
+      points = [{ x: x, y: y }];
+      trajectory = [{ x: x, y: y }];
+
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      ctx.beginPath();
+      ctx.arc(x, y, Math.max(6, canvas.width / 100), 0, 2 * Math.PI);
+      ctx.fillStyle = 'red';
+      ctx.fill();
+
+      statusText.innerText = "🔴 점 선택 완료! '추적 시작' 버튼을 누르세요.";
+      startBtn.disabled = false;
+    }
+
+    canvas.addEventListener('click', handleSelectPoint);
+    canvas.addEventListener('touchstart', handleSelectPoint);
+
+    startBtn.addEventListener('click', async () => {
+      if (points.length === 0) return;
+
+      try {
+        await video.play();
+
+        // [수정 포인트] 화면 크기가 완전히 확정된 후에 추적 상자를 생성하도록 조정
+        let vw = video.videoWidth;
+        let vh = video.videoHeight;
+
+        video.width = vw;
+        video.height = vh;
+        canvas.width = vw;
+        canvas.height = vh;
+
+        cap = new cv.VideoCapture(video);
+        frame = new cv.Mat(vh, vw, cv.CV_8UC4);
+        gray = new cv.Mat(vh, vw, cv.CV_8UC1);
+        prevGray = new cv.Mat(vh, vw, cv.CV_8UC1);
+        
+        pointMat = cv.matFromArray(1, 1, cv.CV_32FC2, [points[0].x, points[0].y]);
+        nextPointMat = new cv.Mat();
+        statusMat = new cv.Mat();
+        errMat = new cv.Mat();
+
+        cap.read(frame);
+        cv.cvtColor(frame, prevGray, cv.COLOR_RGBA2GRAY);
+
+        isTracking = true;
+        statusText.innerText = "▶️ 추적 진행 중...";
+        startBtn.disabled = true;
+
+        requestAnimationFrame(processVideo);
+      } catch (err) {
+        console.error(err);
+        statusText.innerText = "❌ 추적 시작 중 오류: " + err.message;
+      }
+    });
+
+    function processVideo() {
+      if (!isTracking || video.paused || video.ended) {
+        if (video.ended) statusText.innerText = "🎉 추적 완료!";
+        return;
+      }
+
+      try {
+        cap.read(frame);
+        if (!frame.empty()) {
+          cv.cvtColor(frame, gray, cv.COLOR_RGBA2GRAY);
+
+          let winSize = new cv.Size(15, 15);
+          let maxLevel = 2;
+          let criteria = new cv.TermCriteria(cv.TERM_CRITERIA_EPS | cv.TERM_CRITERIA_COUNT, 10, 0.03);
+          
+          cv.calcOpticalFlowPyrLK(prevGray, gray, pointMat, nextPointMat, statusMat, errMat, winSize, maxLevel, criteria);
+
+          if (statusMat.data[0] === 1) {
+            let newX = nextPointMat.data32F[0];
+            let newY = nextPointMat.data32F[1];
+            
+            trajectory.push({ x: newX, y: newY });
+
+            pointMat.delete();
+            pointMat = cv.matFromArray(1, 1, cv.CV_32FC2, [newX, newY]);
+          }
+
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          drawTrajectory();
+
+          gray.copyTo(prevGray);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+
+      requestAnimationFrame(processVideo);
+    }
+
+    function drawTrajectory() {
+      if (trajectory.length < 2) return;
+
+      let lineThickness = Math.max(2, canvas.width / 200);
+
+      ctx.beginPath();
+      ctx.moveTo(trajectory[0].x, trajectory[0].y);
+      for (let i = 1; i < trajectory.length; i++) {
+        ctx.lineTo(trajectory[i].x, trajectory[i].y);
+      }
+      ctx.strokeStyle = '#FF0000';
+      ctx.lineWidth = lineThickness;
+      ctx.stroke();
+
+      let lastPt = trajectory[trajectory.length - 1];
+      ctx.beginPath();
+      ctx.arc(lastPt.x, lastPt.y, lineThickness * 1.5, 0, 2 * Math.PI);
+      ctx.fillStyle = '#00FF00';
+      ctx.fill();
+    }
+
+    resetBtn.addEventListener('click', () => {
+      isTracking = false;
+      video.pause();
+      video.currentTime = 0;
+      points = [];
+      trajectory = [];
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      statusText.innerText = "초기화되었습니다. 영상을 다시 선택하세요.";
+      startBtn.disabled = true;
+    });
+  </script>
+</body>
+</html>
