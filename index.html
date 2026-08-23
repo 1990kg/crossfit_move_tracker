@@ -856,42 +856,31 @@
         ctx.fillText("⚡ MAX", maxSpeedPt.x + 8, maxSpeedPt.y + 14);
       }
 
-      if (currentAngle !== null && currentAnglePt !== null) {
-        ctx.fillStyle = '#FFFF00';
+      if (currentAngle !== null && currentAnglePt) {
+        ctx.font = `bold ${Math.max(14, Math.floor(canvas.width / 26))}px sans-serif`;
+        ctx.fillStyle = '#00FFFF';
         ctx.strokeStyle = '#000000';
         ctx.lineWidth = 3;
-        ctx.font = `bold ${Math.max(16, Math.floor(canvas.width / 25))}px sans-serif`;
-        
         const text = `${currentAngle}°`;
-        const textX = currentAnglePt.x + 10;
-        const textY = currentAnglePt.y - 10;
-        
-        ctx.strokeText(text, textX, textY);
-        ctx.fillText(text, textX, textY);
+        ctx.strokeText(text, currentAnglePt.x + 12, currentAnglePt.y + 4);
+        ctx.fillText(text, currentAnglePt.x + 12, currentAnglePt.y + 4);
       }
     }
 
     function finishTracking() {
       isTracking = false;
       stopVideoRecording();
-      statusText.innerText = "🎉 궤적 추적 완료! '이미지 저장' 또는 '동영상 저장' 버튼을 누르세요.";
+      statusText.innerText = "✅ 추적 완료! 결과를 확인하거나 이미지/동영상으로 저장하세요.";
+      startBtn.disabled = false;
       saveBtn.disabled = false;
       saveVideoBtn.disabled = false;
     }
 
     saveBtn.addEventListener('click', () => {
-      try {
-        const imageURI = canvas.toDataURL('image/png');
-        const link = document.createElement('a');
-        const now = new Date();
-        const timeStamp = `${now.getMonth()+1}${now.getDate()}_${now.getHours()}${now.getMinutes()}`;
-        
-        link.download = `crossfit_move_${timeStamp}.png`;
-        link.href = imageURI;
-        link.click();
-      } catch (e) {
-        console.error("이미지 저장 실패:", e);
-      }
+      const link = document.createElement('a');
+      link.download = 'crossfit_trajectory.png';
+      link.href = canvas.toDataURL('image/png');
+      link.click();
     });
 
     saveVideoBtn.addEventListener('click', () => {
@@ -899,15 +888,18 @@
         alert("저장할 녹화 영상 데이터가 없습니다.");
         return;
       }
-      const blob = new Blob(recordedChunks, { type: 'video/webm' });
+      const blob = new Blob(recordedChunks, { type: recordedChunks[0].type || 'video/webm' });
       const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      const now = new Date();
-      const timeStamp = `${now.getMonth()+1}${now.getDate()}_${now.getHours()}${now.getMinutes()}`;
-
-      link.download = `crossfit_move_${timeStamp}.webm`;
-      link.href = url;
-      link.click();
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = 'crossfit_trajectory.webm';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      }, 100);
     });
 
     resetBtn.addEventListener('click', () => {
@@ -919,16 +911,19 @@
       currentAnglePt = null;
       maxSpeedPt = null;
       topPt = null;
+      recordedChunks = [];
+      stopVideoRecording();
 
       if (video.src) {
-        video.pause();
-        video.currentTime = 0;
+        video.currentTime = (isLoopEnabled && loopATime !== null) ? loopATime : 0;
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      } else {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
       }
 
-      updateStatusGuide();
       saveBtn.disabled = true;
       saveVideoBtn.disabled = true;
+      updateStatusGuide();
     });
   </script>
 </body>
