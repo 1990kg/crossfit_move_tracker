@@ -23,11 +23,9 @@
     select, label { font-size: 14px; font-weight: bold; }
     select { padding: 8px 12px; border-radius: 6px; border: 1px solid #ccc; background: #fff; cursor: pointer; }
 
-    /* 제어 패널 스타일 */
     .control-panel { background: #fff; padding: 12px; border-radius: 8px; border: 1px solid #ddd; margin-top: 10px; display: flex; flex-direction: column; gap: 10px; }
     .panel-title { font-size: 13px; font-weight: bold; color: #555; margin-bottom: 2px; }
     
-    /* 실시간 타임스탬프 표시 영역 */
     .timestamp-display { font-size: 16px; font-weight: bold; color: #1d1d1f; font-family: monospace; background: #eef2f7; padding: 6px 12px; border-radius: 6px; display: inline-block; }
 
     .ctrl-btn-group { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
@@ -44,9 +42,9 @@
     input[type="file"] { display: none; }
     .custom-file-upload { display: inline-block; padding: 12px 20px; background: #34c759; color: white; font-weight: bold; border-radius: 6px; cursor: pointer; margin-bottom: 10px; width: 100%; }
     
-    .legend-box { display: flex; justify-content: center; align-items: center; gap: 12px; font-size: 12px; margin-top: 6px; background: #eee; padding: 6px; border-radius: 6px; }
-    .legend-item { display: flex; align-items: center; gap: 4px; font-weight: bold; }
-    .color-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+    .legend-box { display: flex; justify-content: center; align-items: center; gap: 8px; font-size: 11px; margin-top: 6px; background: #eee; padding: 6px 10px; border-radius: 6px; flex-wrap: wrap; }
+    .legend-item { display: flex; align-items: center; gap: 3px; font-weight: bold; }
+    .color-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
 
     footer { margin-top: 35px; padding-top: 15px; border-top: 1px solid #ddd; }
     .youtube-link { display: inline-flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; color: #007aff; font-weight: bold; font-size: 14px; padding: 10px 16px; border-radius: 20px; background: #fff; border: 1px solid #eee; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: all 0.2s; }
@@ -106,23 +104,19 @@
       </div>
 
       <div class="legend-box">
-        <span style="font-weight: bold; margin-right: 4px;">속도 궤적(Heatmap):</span>
-        <span class="legend-item"><span class="color-dot" style="background:#0000FF;"></span>느림</span>
-        <span class="legend-item"><span class="color-dot" style="background:#00FF00;"></span>보통</span>
-        <span class="legend-item"><span class="color-dot" style="background:#FF0000;"></span>빠름</span>
+        <span style="font-weight: bold; margin-right: 2px;">속도 궤적:</span>
+        <span class="legend-item"><span class="color-dot" style="background:#0000FF;"></span>파랑(느림)</span>➔
+        <span class="legend-item"><span class="color-dot" style="background:#00FF00;"></span>청록/초록(보통)</span>➔
+        <span class="legend-item"><span class="color-dot" style="background:#FFFF00;"></span>노랑/주황(빠름)</span>➔
+        <span class="legend-item"><span class="color-dot" style="background:#FF0000;"></span>빨강(폭발적 고속)</span>
       </div>
     </div>
 
-    <!-- 영상 프레임 조작, 타임스탬프 및 A-B Loop 제어 패널 -->
     <div class="control-panel">
       <div class="panel-title">🎬 재생 중인 시간 / 전체 시간</div>
-      
-      <!-- 실시간 타임스탬프 표시 -->
       <div>
         <span id="timestampDisplay" class="timestamp-display">⏱️ 00:00.0 / 00:00.0</span>
       </div>
-
-      <!-- 수정 완료: 문구 단순화 -->
       <div class="ctrl-btn-group">
         <button id="prevFrameBtn" class="ctrl-btn" disabled>◀ 1프레임</button>
         <button id="nextFrameBtn" class="ctrl-btn" disabled>1프레임 ▶</button>
@@ -143,19 +137,33 @@
     </div>
 
     <footer>
-      <a id="youtubeAnchor" href="https://www.youtube.com/@1990kgcrossfit/shorts" target="_blank" rel="noopener noreferrer" class="youtube-link">
+      <!-- 숏츠 직링크 연결 (반바지 이모지 제거 적용) -->
+      <a id="youtubeAnchor" href="#" target="_blank" rel="noopener noreferrer" class="youtube-link">
         <svg class="youtube-icon" viewBox="0 0 24 17">
           <path d="M23.498 2.616a3.016 3.016 0 0 0-2.122-2.136C19.505 0 12 0 12 0s-7.505 0-9.377.48C1.251.96.48 1.731.241 3.107 0 4.982 0 8.5 0 8.5s0 3.518.241 5.393c.239 1.376 1.01 2.147 2.382 2.387C4.495 17 12 17 12 17s7.505 0 9.377-.48a3.015 3.015 0 0 0 2.122-2.137C24 12.503 24 8.5 24 8.5s0-3.518-.502-5.884zM9.545 12.068V4.932L15.818 8.5l-6.273 3.568z"/>
         </svg>
-        <span id="ytText">🩳 최신 Shorts 연결 중...</span>
+        <span id="ytText">1990kg <span class="yt-label">PLAY</span></span>
       </a>
     </footer>
   </div>
 
-  <video id="videoInput" style="display:none;" playsinline muted webkit-playsinline></video>
+  <!-- autoplay 속성 추가됨 -->
+  <video id="videoInput" style="display:none;" autoplay playsinline muted webkit-playsinline></video>
   <canvas id="templateCanvas" style="display:none;"></canvas>
 
   <script>
+    const LATEST_SHORTS_ID = ""; 
+
+    const youtubeAnchor = document.getElementById('youtubeAnchor');
+
+    function applyDirectShortsLink() {
+      if (LATEST_SHORTS_ID && LATEST_SHORTS_ID.trim() !== "") {
+        youtubeAnchor.href = `https://www.youtube.com/shorts/${LATEST_SHORTS_ID.trim()}`;
+      } else {
+        youtubeAnchor.href = "https://www.youtube.com/@1990kgcrossfit/shorts";
+      }
+    }
+
     const video = document.getElementById('videoInput');
     const canvas = document.getElementById('canvasOutput');
     const ctx = canvas.getContext('2d', { alpha: false });
@@ -173,8 +181,6 @@
     const angleSelect = document.getElementById('angleSelect');
     const angleRow = document.getElementById('angleRow');
     const speedSelect = document.getElementById('speedSelect');
-    const youtubeAnchor = document.getElementById('youtubeAnchor');
-    const ytText = document.getElementById('ytText');
 
     const timestampDisplay = document.getElementById('timestampDisplay');
     const prevFrameBtn = document.getElementById('prevFrameBtn');
@@ -191,7 +197,6 @@
     let currentAngle = null;
     let currentAnglePt = null;
 
-    // 성능 최적화: AI 프레임 연산 제어 카운터
     let frameCounter = 0;
     let isProcessingPose = false;
 
@@ -223,43 +228,10 @@
       timestampDisplay.innerText = `⏱️ ${current} / ${total}`;
     }
 
-    async function fetchLatestShorts() {
-      const targetRss = 'https://www.youtube.com/feeds/videos.xml?user=1990kgcrossfit';
-      const proxyList = [
-        `https://api.cors.lol/?url=${encodeURIComponent(targetRss)}`,
-        `https://corsproxy.io/?${encodeURIComponent(targetRss)}`
-      ];
-
-      for (let url of proxyList) {
-        try {
-          const res = await fetch(url);
-          const xmlText = await res.text();
-          const parser = new DOMParser();
-          const xmlDoc = parser.parseFromString(xmlText, "text/xml");
-          const entries = xmlDoc.getElementsByTagName("entry");
-
-          if (entries && entries.length > 0) {
-            const latestVideoId = entries[0].getElementsByTagName("yt:videoId")[0]?.textContent;
-            if (latestVideoId) {
-              youtubeAnchor.href = `https://www.youtube.com/shorts/${latestVideoId.trim()}`;
-              ytText.innerHTML = `🩳 최신 Shorts 바로재생 <span class="yt-label">PLAY</span>`;
-              return;
-            }
-          }
-        } catch (e) {
-          console.warn("Proxy 시도 실패, 대안 시도 중:", e);
-        }
-      }
-
-      youtubeAnchor.href = "https://www.youtube.com/@1990kgcrossfit/shorts";
-      ytText.innerText = "🩳 최신 Shorts 보러가기";
-    }
-
     function initPose() {
       poseModel = new Pose({
         locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
       });
-      // 최적화: Lite 모델급 연산 스펙 세팅
       poseModel.setOptions({
         modelComplexity: 0,
         smoothLandmarks: false,
@@ -298,6 +270,16 @@
       }
     }
 
+    // 영상 재생 중 캔버스를 실시간 업데이트하는 루프
+    function renderPreviewLoop() {
+      if (!isTracking && video.src && !video.paused && !video.ended) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        drawTrajectory();
+        updateTimestampUI();
+        requestAnimationFrame(renderPreviewLoop);
+      }
+    }
+
     fileInput.addEventListener('change', (e) => {
       let file = e.target.files[0];
       if (!file) return;
@@ -319,7 +301,6 @@
       video.src = URL.createObjectURL(file);
 
       video.onloadedmetadata = () => {
-        // 성능 최적화: 가로 최대 해상도 제한 (480px)
         let scale = Math.min(1, 480 / Math.max(video.videoWidth, video.videoHeight));
         canvas.width = Math.floor(video.videoWidth * scale);
         canvas.height = Math.floor(video.videoHeight * scale);
@@ -332,6 +313,13 @@
         setLoopABtn.disabled = false;
         setLoopBBtn.disabled = false;
         updateTimestampUI();
+
+        // 💥 영상을 선택하자마자 자동으로 재생 시작
+        video.play().then(() => {
+          renderPreviewLoop();
+        }).catch(err => {
+          console.log("자동 재생 정책 제한:", err);
+        });
       };
 
       video.onseeked = () => {
@@ -387,6 +375,10 @@
         toggleLoopBtn.classList.remove('active');
         toggleLoopBtn.innerText = `🔁 구간반복 OFF`;
       }
+    });
+
+    video.addEventListener('play', () => {
+      if (!isTracking) renderPreviewLoop();
     });
 
     video.addEventListener('timeupdate', () => {
@@ -477,7 +469,6 @@
       return Math.round(angle);
     }
 
-    // 성능 최적화: 2프레임당 1회 연산 (Frame Throttling 적용)
     async function processAiFrame() {
       if (!isTracking || video.paused || video.ended) {
         if (video.ended) finishTracking();
@@ -598,7 +589,6 @@
       requestAnimationFrame(processManualFrame);
     }
 
-    // 성능 최적화: 매칭 탐색 스킵 간격 보정 (8px 피치)
     function fastMatchTemplate(searchImg, tplImg) {
       const sw = searchImg.width, sh = searchImg.height;
       const tw = tplImg.width, th = tplImg.height;
@@ -627,17 +617,20 @@
     }
 
     function getSpeedColor(speed) {
-      const maxSpeed = 12.0;
+      const maxSpeed = 22.0; 
       const ratio = Math.min(1.0, speed / maxSpeed);
 
-      if (ratio < 0.5) {
-        const g = Math.floor(255 * (ratio * 2));
-        const b = Math.floor(255 * (1 - ratio * 2));
-        return `rgb(0, ${g}, ${b})`;
+      if (ratio < 0.35) {
+        const g = Math.floor(255 * (ratio / 0.35));
+        return `rgb(0, ${g}, 255)`;
+      } else if (ratio < 0.7) {
+        const t = (ratio - 0.35) / 0.35;
+        const r = Math.floor(255 * t);
+        return `rgb(${r}, 255, 0)`;
       } else {
-        const r = Math.floor(255 * ((ratio - 0.5) * 2));
-        const g = Math.floor(255 * (1 - (ratio - 0.5) * 2));
-        return `rgb(${r}, ${g}, 0)`;
+        const t = (ratio - 0.7) / 0.3;
+        const g = Math.floor(255 * (1 - t));
+        return `rgb(255, ${g}, 0)`;
       }
     }
 
@@ -734,7 +727,7 @@
 
     window.onload = () => {
       initPose();
-      fetchLatestShorts();
+      applyDirectShortsLink();
     };
   </script>
 </body>
