@@ -57,21 +57,22 @@
     .legend-item { display: flex; align-items: center; gap: 3px; font-weight: bold; }
     .color-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
 
-    footer { margin-top: 35px; padding-top: 15px; border-top: 1px solid #ddd; position: relative; }
-    .youtube-link { display: inline-flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; color: #007aff; font-weight: bold; font-size: 14px; padding: 10px 16px; border-radius: 20px; background: #fff; border: 1px solid #eee; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: all 0.2s; }
+    footer { margin-top: 35px; padding-top: 15px; padding-bottom: 20px; border-top: 1px solid #ddd; position: relative; }
+    .youtube-link { display: inline-flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; color: #007aff; font-weight: bold; font-size: 14px; padding: 10px 16px; border-radius: 20px; background: #fff; border: 1px solid #eee; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: all 0.2s; position: relative; z-index: 10; }
     .youtube-link:hover { background: #f0f7ff; transform: translateY(-1px); }
     .youtube-icon { width: 22px; height: 16px; fill: #FF0000; }
     .yt-label { font-size: 11px; background: #ff2d55; color: white; padding: 2px 6px; border-radius: 10px; margin-left: 4px; font-weight: 800; }
 
-    /* 최하단에 스크롤했을 때만 보이도록 절대 위치로 변경 */
+    /* 페이지 최하단 우측에 고정되는 연한 방문자 카운터 */
     .page-visit-counter {
       position: absolute;
-      bottom: 5px;
+      bottom: 0px;
       right: 5px;
       font-size: 10px;
       color: #aaaaaa;
       font-family: monospace, sans-serif;
       user-select: none;
+      z-index: 1;
     }
   </style>
 </head>
@@ -163,19 +164,46 @@
     </div>
 
     <footer>
-      <a id="youtubeAnchor" href="https://www.youtube.com/@1990kgcrossfit/shorts" target="_blank" rel="noopener noreferrer" class="youtube-link">
+      <!-- 유튜브 숏츠 바로가기 버튼 (초기 href 설정) -->
+      <a id="youtubeAnchor" href="https://www.youtube.com/shorts/YOUR_SHORTS_ID" target="_blank" rel="noopener noreferrer" class="youtube-link">
         <svg class="youtube-icon" viewBox="0 0 24 17">
           <path d="M23.498 2.616a3.016 3.016 0 0 0-2.122-2.136C19.505 0 12 0 12 0s-7.505 0-9.377.48C1.251.96.48 1.731.241 3.107 0 4.982 0 8.5 0 8.5s0 3.518.241 5.393c.239 1.376 1.01 2.147 2.382 2.387C4.495 17 12 17 12 17s7.505 0 9.377-.48a3.015 3.015 0 0 0 2.122-2.137C24 12.503 24 8.5 24 8.5s0-3.518-.502-5.884zM9.545 12.068V4.932L15.818 8.5l-6.273 3.568z"/>
         </svg>
         <span id="ytText">1990kg <span class="yt-label">PLAY</span></span>
       </a>
-      <!-- 페이지 최하단에 위치하는 카운터 -->
+
+      <!-- 스크롤 시 최하단에서만 보이는 방문자 수 -->
       <div id="visitCounter" class="page-visit-counter">v: ...</div>
     </footer>
   </div>
 
   <video id="videoInput" style="display:none;" autoplay playsinline muted webkit-playsinline></video>
   <canvas id="templateCanvas" style="display:none;"></canvas>
+
+  <!-- 수기 수정용 설정 스크립트 -->
+  <script>
+    /* =======================================================================
+     * 📌 [수기 입력 위치] 최신 쇼츠 URL 또는 숏츠 ID 변경하기
+     * -----------------------------------------------------------------------
+     * 원하는 방식을 선택하여 아래 변수의 따옴표 안 내용만 바꿔주시면 됩니다.
+     * 
+     * 예시 1 (전체 URL): "https://www.youtube.com/shorts/abc123xyz"
+     * 예시 2 (개별 ID만 입력): "abc123xyz"
+     * ======================================================================= */
+    const MY_LATEST_SHORTS = "tNcphMNuoXo"; 
+
+    document.addEventListener("DOMContentLoaded", () => {
+      const youtubeAnchor = document.getElementById('youtubeAnchor');
+      if (youtubeAnchor && MY_LATEST_SHORTS) {
+        let finalUrl = MY_LATEST_SHORTS.trim();
+        // ID만 적었을 경우 자동으로 숏츠 풀 주소 생성
+        if (!finalUrl.startsWith("http://") && !finalUrl.startsWith("https://")) {
+          finalUrl = `https://www.youtube.com/shorts/${finalUrl}`;
+        }
+        youtubeAnchor.href = finalUrl;
+      }
+    });
+  </script>
 
   <!-- Firebase SDK 및 로직 -->
   <script type="module">
@@ -218,16 +246,6 @@
           console.warn("방문수 조회 실패:", e);
         }
       }).catch(e => console.warn("방문 기록 실패:", e));
-
-      getDoc(doc(db, "config", "youtube")).then(snapshot => {
-        if (snapshot.exists() && snapshot.data().latestShortsId) {
-          const shortsId = snapshot.data().latestShortsId.trim();
-          const youtubeAnchor = document.getElementById('youtubeAnchor');
-          if (shortsId) {
-            youtubeAnchor.href = `https://www.youtube.com/shorts/${shortsId}`;
-          }
-        }
-      }).catch(e => console.warn("유튜브 쇼츠 ID 로드 실패:", e));
 
     } catch (e) {
       console.warn("Firebase 연동 오류:", e);
